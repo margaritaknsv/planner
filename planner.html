@@ -302,6 +302,14 @@ button { cursor: pointer; }
 .task-main { border: 0; background: none; padding: 0; text-align: left; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .task-main .t { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
 .task.done .t { text-decoration: line-through; color: var(--ink-3); }
+.tm-tag { color: var(--ink-2); font-weight: 600; }
+.qrow { display: flex; gap: 6px; }
+.qrow .qdate { flex: 1; min-width: 0; }
+.qrow .qtime { flex: 0 0 116px; width: 116px; }
+.ev.is-task { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c, var(--untagged)) 55%, transparent); }
+.ev.is-task .t::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 2px; border: 1.5px solid var(--c, var(--untagged)); vertical-align: 0; }
+.ev.done { opacity: .5; }
+.ev.done .t { text-decoration: line-through; }
 .task-main .m { font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .flag { color: var(--today); font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
 .flag svg { width: 11px; height: 11px; }
@@ -314,7 +322,16 @@ button { cursor: pointer; }
 .gcal.warn .gdot { background: var(--now); }
 .gcal .gtext { flex: 1; min-width: 0; }
 .ev.ext { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(--untagged)) 45%, transparent); }
-.g-src { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-bottom: 4px; }
+.g-src { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.g-src::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--untagged)); }
+.info-top { display: flex; align-items: flex-start; gap: 12px; }
+.info-head { flex: 1; min-width: 0; }
+.info-head h2 { overflow-wrap: anywhere; }
+.info-rows { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.info-rows > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
+.info-rows dt { font-size: 12px; font-weight: 600; color: var(--ink-3); padding-top: 1px; }
+.info-rows dd { margin: 0; color: var(--ink); display: flex; flex-wrap: wrap; gap: 6px; }
+.info-rows dd.g-notes { display: block; color: var(--ink-2); }
 .g-when { color: var(--ink-2); font-weight: 500; margin-top: 4px; }
 .g-notes { margin: 0; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
 a.btn { text-decoration: none; color: var(--ink); }
@@ -468,7 +485,10 @@ a.btn { text-decoration: none; color: var(--ink); }
             <button class="btn primary" type="submit">Добавить</button>
           </form>
           <div class="quick-opts">
-            <input type="date" id="quickDate" class="qdate" aria-label="Дата задачи">
+            <div class="qrow">
+              <input type="date" id="quickDate" class="qdate" aria-label="Дата задачи">
+              <input type="time" id="quickTime" class="qdate qtime" step="300" aria-label="Время задачи (необязательно)">
+            </div>
             <div class="chips" id="quickTags" role="group" aria-label="Теги задачи"></div>
           </div>
         </div>
@@ -495,6 +515,7 @@ a.btn { text-decoration: none; color: var(--ink); }
     <label class="field"><span>Название</span><input id="fTitle" maxlength="140" autocomplete="off" placeholder="Например, позвонить маме"></label>
     <div class="row">
       <label class="field"><span>Дата</span><input id="fDate" type="date"></label>
+      <label class="field task-only"><span>Время</span><input id="fTime" type="time" step="300"></label>
       <label class="field ev-only"><span>Начало</span><input id="fStart" type="time" step="300"></label>
       <label class="field ev-only"><span>Конец</span><input id="fEnd" type="time" step="300"></label>
     </div>
@@ -540,14 +561,23 @@ a.btn { text-decoration: none; color: var(--ink); }
 </div>
 
 <!-- Read-only Google Calendar event -->
+<!-- Short card for a task or event clicked in the calendar -->
 <div class="scrim" id="gScrim" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gTitle">
-    <div>
-      <div class="g-src">Из Google Календаря · только просмотр</div>
-      <h2 id="gTitle"></h2>
-      <div class="g-when" id="gWhen"></div>
+  <div class="sheet info" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+    <div class="info-top">
+      <div class="info-head">
+        <div class="g-src" id="gSrc"></div>
+        <h2 id="gTitle"></h2>
+      </div>
+      <button type="button" class="btn icon soft" id="gEdit" aria-label="Изменить" title="Изменить">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+      </button>
     </div>
-    <p class="g-notes" id="gNotes"></p>
+    <dl class="info-rows">
+      <div><dt>Когда</dt><dd id="gWhen"></dd></div>
+      <div id="gTagsRow"><dt>Теги</dt><dd id="gTags"></dd></div>
+      <div id="gNotesRow"><dt>Заметка</dt><dd class="g-notes" id="gNotes"></dd></div>
+    </dl>
     <div class="actions">
       <a class="btn soft" id="gLink" target="_blank" rel="noopener">Открыть в Google Календаре</a>
       <span class="grow"></span>
@@ -657,6 +687,14 @@ a.btn { text-decoration: none; color: var(--ink); }
   const allItems = () => state.items.concat(state.gitems);
   const findItem = id => allItems().find(i => i.id === id);
   const shown = () => allItems().filter(passes);
+  // Events are ticked off per day with small "mark" records, so a repeating or Google event can be done today but not tomorrow.
+  const markId = (id, ds) => "m_" + id + "_" + ds;
+  const markSet = () => new Set(state.items.filter(i => i.kind === "mark").map(i => i.id));
+  function toggleEventDone(ev, ds) {
+    const id = markId(ev.id, ds);
+    if (state.items.some(i => i.id === id)) removeItem(id);
+    else saveItem({ id, kind: "mark", ref: ev.id, date: ds, done: true, createdAt: Date.now() });
+  }
   function saveFilter() { try { localStorage.setItem(FILTER_KEY, JSON.stringify([...state.filter])); } catch {} }
 
   // ---------- storage ----------
@@ -793,7 +831,7 @@ a.btn { text-decoration: none; color: var(--ink); }
 
   function renderTagbar() {
     const f = state.filter;
-    const hasUntagged = state.items.some(i => !tagIdsOf(i).length);
+    const hasUntagged = state.items.some(i => i.kind !== "mark" && !tagIdsOf(i).length);
     $("tagbar").innerHTML = `<button class="chip plain" data-filter="" aria-pressed="${!f.size}">Все</button>
       ${state.tags.map(t => `<button class="chip" data-filter="${esc(t.id)}" style="--c:${safeColor(t.color)}" aria-pressed="${f.has(t.id)}">${esc(t.name)}</button>`).join("")}
       ${hasUntagged || f.has(NONE) ? `<button class="chip" data-filter="${NONE}" aria-pressed="${f.has(NONE)}">Без тега</button>` : ""}
@@ -831,8 +869,9 @@ a.btn { text-decoration: none; color: var(--ink); }
       const tasks = sortTasks(items.filter(i => i.kind === "task" && i.date === ds));
       const done = tasks.filter(t => t.done).length;
       const total = evs.length + tasks.length;
-      const list = [...evs, ...tasks.filter(t => !t.done)];
-      const chips = list.slice(0, 3).map(i => `<span class="mchip${i.kind === "task" ? " is-task" : ""}"${styleC(i)}>${i.kind === "event" && i.start ? `<b>${esc(i.start)}</b> ` : ""}${esc(i.title)}</span>`).join("");
+      const marks = markSet();
+      const list = [...evs.filter(e => !marks.has(markId(e.id, ds))), ...tasks.filter(t => !t.done)];
+      const chips = list.slice(0, 3).map(i => { const tm = i.kind === "event" ? i.start : i.time; return `<span class="mchip${i.kind === "task" ? " is-task" : ""}"${styleC(i)}>${tm ? `<b>${esc(tm)}</b> ` : ""}${esc(i.title)}</span>`; }).join("");
       const more = list.length > 3 ? `<span class="mmore">ещё ${list.length - 3}</span>` : "";
       // Load strip: 6+ items in a day reads as a full day.
       const load = Math.min(total / 6, 1);
@@ -875,7 +914,9 @@ a.btn { text-decoration: none; color: var(--ink); }
     for (let h = START_H; h < END_H; h++) hours.push(`<div>${pad(h)}:00</div>`);
 
     grid.innerHTML = `<div class="times">${hours.join("")}</div>` + days.map(ds => {
-      const evs = items.filter(i => i.kind === "event" && !i.allDay && occursOn(i, ds)).map(i => {
+      const marks = markSet();
+      const evs = items.filter(i => (i.kind === "event" && !i.allDay && occursOn(i, ds)) || (i.kind === "task" && i.time && i.date === ds)).map(i => {
+        if (i.kind === "task") { const s = Math.max(toMin(i.time), START_H * 60); return { i, s, e: Math.min(s + 30, END_H * 60) }; }
         let s = toMin(i.start) ?? START_H * 60, e = toMin(i.end);
         if (e == null || e <= s) e = s + 30;
         s = Math.max(s, START_H * 60); e = Math.min(Math.max(e, s + 15), END_H * 60);
@@ -885,10 +926,11 @@ a.btn { text-decoration: none; color: var(--ink); }
       const blocks = evs.map(({ i, s, e, lane, n }) => {
         const top = (s - START_H * 60) / 60 * HOUR + 1, h = Math.max((e - s) / 60 * HOUR - 3, 18);
         const w = 100 / n, c = colorOf(i);
-        return `<button class="ev${h < 40 ? " short" : ""}${i.source === "google" ? " ext" : ""}" data-id="${esc(i.id)}"
+        const task = i.kind === "task", done = task ? i.done : marks.has(markId(i.id, ds));
+        return `<button class="ev${h < 40 ? " short" : ""}${i.source === "google" ? " ext" : ""}${task ? " is-task" : ""}${done ? " done" : ""}" data-id="${esc(i.id)}"
           style="${c ? `--c:${c};` : ""}top:${top}px;height:${h}px;left:calc(${lane * w}% + 3px);width:calc(${w}% - 6px)"
           title="${esc(i.title)} · ${esc(i.start || "")}–${esc(i.end || "")}">
-          <span class="t">${esc(i.title)}</span><span class="tm">${esc(i.start || "")}${i.end ? "–" + esc(i.end) : ""}${i.repeat && i.repeat !== "none" ? " ↻" : ""}</span>
+          <span class="t">${esc(i.title)}</span><span class="tm">${task ? esc(i.time) : esc(i.start || "") + (i.end ? "–" + esc(i.end) : "")}${i.repeat && i.repeat !== "none" ? " ↻" : ""}</span>
         </button>`;
       }).join("");
       let now = "";
@@ -925,6 +967,7 @@ a.btn { text-decoration: none; color: var(--ink); }
   // `groupTag` is the tag the row is grouped under, so it isn't repeated as a pill.
   function taskRow(t, showDate, groupTag) {
     const meta = [];
+    if (t.time) meta.push(`<span class="tm-tag">${esc(t.time)}</span>`);
     if (t.important) meta.push(`<span class="flag">${flagSvg}важно</span>`);
     meta.push(pills(t, groupTag));
     if (showDate && t.date) meta.push(`<span>${esc(fmtDM.format(parse(t.date)))}</span>`);
@@ -936,7 +979,10 @@ a.btn { text-decoration: none; color: var(--ink); }
     </div>`;
   }
 
-  const sortTasks = arr => arr.slice().sort((a, b) => (a.done - b.done) || ((b.important ? 1 : 0) - (a.important ? 1 : 0)) || (a.createdAt || 0) - (b.createdAt || 0));
+  // Open before done; tasks with a time first, by time; then important; then oldest first.
+  const sortTasks = arr => arr.slice().sort((a, b) => (a.done - b.done)
+    || ((a.time ? 0 : 1) - (b.time ? 0 : 1)) || (a.time || "").localeCompare(b.time || "")
+    || ((b.important ? 1 : 0) - (a.important ? 1 : 0)) || (a.createdAt || 0) - (b.createdAt || 0));
 
   function groupBlock({ name, color, count, sub, warn, rows }) {
     return `<div class="group"${color ? ` style="--c:${color}"` : ""}>
@@ -951,9 +997,14 @@ a.btn { text-decoration: none; color: var(--ink); }
     $("sideTitle").textContent = diff === 0 ? "Сегодня" : diff === 1 ? "Завтра" : diff === -1 ? "Вчера" : cap(fmtDow.format(selD).replace(".", "")) + ", " + selD.getDate();
     $("sideDate").textContent = cap(fmtLong.format(selD));
     const dayTasks = sortTasks(items.filter(i => i.kind === "task" && i.date === sel));
-    const done = dayTasks.filter(t => t.done).length;
-    $("progText").textContent = `${done} из ${dayTasks.length}`;
-    $("barFill").style.width = dayTasks.length ? `${done / dayTasks.length * 100}%` : "0";
+    const marks = markSet();
+    const dayEvents = items.filter(i => i.kind === "event" && occursOn(i, sel))
+      .map(e => ({ e, done: marks.has(markId(e.id, sel)) }))
+      .sort((a, b) => (a.done - b.done) || (a.e.allDay ? -1 : toMin(a.e.start) ?? 0) - (b.e.allDay ? -1 : toMin(b.e.start) ?? 0));
+    const total = dayTasks.length + dayEvents.length;
+    const done = dayTasks.filter(t => t.done).length + dayEvents.filter(x => x.done).length;
+    $("progText").textContent = `${done} из ${total}`;
+    $("barFill").style.width = total ? `${done / total * 100}%` : "0";
 
     const body = $("sideBody");
     if (!state.loaded) { body.innerHTML = `<div class="empty">Загружаю ваши задачи…</div>`; return; }
@@ -975,10 +1026,10 @@ a.btn { text-decoration: none; color: var(--ink); }
       });
     });
 
-    const dayEvents = items.filter(i => i.kind === "event" && occursOn(i, sel)).sort((a, b) => (a.allDay ? -1 : toMin(a.start) ?? 0) - (b.allDay ? -1 : toMin(b.start) ?? 0));
     if (dayEvents.length) html += groupBlock({
-      name: "В расписании", count: dayEvents.length,
-      rows: dayEvents.map(e => `<div class="task"${styleC(e)}><span class="dot"></span>
+      name: "В расписании", count: dayEvents.filter(x => !x.done).length,
+      rows: dayEvents.map(({ e, done }) => `<div class="task${done ? " done" : ""}"${styleC(e)}>
+        <button class="check" data-evdone="${esc(e.id)}" aria-label="${done ? "Снять отметку" : "Отметить выполненным"}: ${esc(e.title)}">${checkSvg}</button>
         <button class="task-main" data-id="${esc(e.id)}"><span class="t">${esc(e.title)}</span><span class="m"><span>${e.allDay ? "весь день" : esc(e.start || "") + (e.end ? "–" + esc(e.end) : "")}</span>${pills(e)}${e.source === "google" ? `<span>Google</span>` : ""}</span></button></div>`).join(""),
     });
 
@@ -1000,6 +1051,7 @@ a.btn { text-decoration: none; color: var(--ink); }
     $("fTitle").value = editing.title || "";
     $("fDate").value = editing.date || "";
     $("fStart").value = editing.start || "";
+    $("fTime").value = editing.time || "";
     $("fEnd").value = editing.end || "";
     $("fRepeat").value = editing.repeat || "none";
     $("fImportant").checked = !!editing.important;
@@ -1044,9 +1096,10 @@ a.btn { text-decoration: none; color: var(--ink); }
       if (!it.date) return hint("Для события нужна дата.");
       if (!it.start) return hint("Укажите время начала.");
       if (it.end && toMin(it.end) <= toMin(it.start)) return hint("Конец должен быть позже начала.");
-      delete it.important; delete it.done;
+      delete it.important; delete it.done; delete it.time;
     } else {
       it.important = $("fImportant").checked; it.done = !!it.done;
+      it.time = $("fTime").value; if (!it.time) delete it.time;
       delete it.start; delete it.end; delete it.repeat;
     }
     if (!it.id) { it.id = newId(); it.createdAt = Date.now(); }
@@ -1324,7 +1377,7 @@ a.btn { text-decoration: none; color: var(--ink); }
     const mc = e.target.closest("[data-mday]");
     if (mc) { state.selected = mc.dataset.mday; render(); return; }
     const ev = e.target.closest(".ev");
-    if (ev) { const it = findItem(ev.dataset.id); if (it) openEditor(it); return; }
+    if (ev) { const it = findItem(ev.dataset.id); if (it) openInfo(it, ev.closest(".col")?.dataset.col); return; }
     const colEl = e.target.closest(".col"); if (!colEl) return;
     const y = e.clientY - colEl.getBoundingClientRect().top;
     const m = START_H * 60 + Math.floor(y / HOUR * 2) * 30;
@@ -1336,6 +1389,8 @@ a.btn { text-decoration: none; color: var(--ink); }
   });
   $("sideBody").addEventListener("click", e => {
     const tg = e.target.closest("[data-toggle]");
+    const ed = e.target.closest("[data-evdone]");
+    if (ed) { const ev = findItem(ed.dataset.evdone); if (ev) toggleEventDone(ev, state.selected); return; }
     if (tg) { const t = state.items.find(i => i.id === tg.dataset.toggle); if (t) saveItem({ ...t, tags: tagIdsOf(t), done: !t.done, doneAt: !t.done ? Date.now() : null }); return; }
     const m = e.target.closest(".task-main");
     if (m) { const it = findItem(m.dataset.id); if (it) openEditor(it); return; }
@@ -1344,8 +1399,9 @@ a.btn { text-decoration: none; color: var(--ink); }
     e.preventDefault();
     const v = $("quickInput").value.trim(); if (!v) return;
     const important = /!$/.test(v);
-    const date = $("quickDate").value, tags = quickTags();
-    saveItem({ id: newId(), kind: "task", title: v.replace(/\s*!$/, ""), date, tags, important, done: false, createdAt: Date.now() });
+    const date = $("quickDate").value, tags = quickTags(), time = $("quickTime").value;
+    saveItem({ id: newId(), kind: "task", title: v.replace(/\s*!$/, ""), date, ...(time ? { time } : {}), tags, important, done: false, createdAt: Date.now() });
+    $("quickTime").value = "";
     $("quickInput").value = "";
     if (date !== state.selected) toast(date ? `Добавлено на ${fmtDM.format(parse(date))}` : "Добавлено без срока");
     quick.date = quick.tags = null;
@@ -1490,14 +1546,31 @@ a.btn { text-decoration: none; color: var(--ink); }
       if (st !== "denied") { gcal.status = "ask"; renderGoogle(); }
     }
   });
-  function openGoogleEvent(it) {
+  const REPEAT_TEXT = { daily: "каждый день", weekdays: "по будням", weekly: "каждую неделю" };
+  let infoItem = null;
+  // Short card: title, when, tags, note. The pencil opens the full editor; Google events only link out.
+  function openInfo(it, ds) {
+    infoItem = it;
+    const google = it.source === "google", task = it.kind === "task";
+    const day = ds || it.date;
+    const sheet = $("gScrim").querySelector(".sheet"), c = colorOf(it);
+    sheet.style.setProperty("--c", c || "");
+    const done = task ? it.done : markSet().has(markId(it.id, day));
+    $("gSrc").textContent = (google ? "Google Календарь" : task ? "Задача" : "Событие") + (done ? " · выполнено" : "");
     $("gTitle").textContent = it.title;
-    const d = cap(fmtLong.format(parse(it.date)));
-    $("gWhen").textContent = it.allDay ? `${d}, весь день` : `${d}, ${it.start}${it.end ? "–" + it.end : ""}`;
-    $("gNotes").textContent = it.notes; $("gNotes").hidden = !it.notes;
-    $("gLink").hidden = !it.link; if (it.link) $("gLink").href = it.link;
+    const d = day ? cap(fmtLong.format(parse(day))) : "Без срока";
+    const time = it.allDay ? "весь день" : task ? it.time || "" : `${it.start || ""}${it.end ? "–" + it.end : ""}`;
+    const rep = !task && REPEAT_TEXT[it.repeat] ? `, ${REPEAT_TEXT[it.repeat]}` : "";
+    $("gWhen").textContent = (time ? `${d}, ${time}` : d) + rep;
+    const tagsHtml = pills(it);
+    $("gTagsRow").hidden = !tagsHtml; $("gTags").innerHTML = tagsHtml;
+    $("gNotesRow").hidden = !it.notes; $("gNotes").textContent = it.notes || "";
+    $("gEdit").hidden = google;
+    $("gLink").hidden = !(google && it.link); if (google && it.link) $("gLink").href = it.link;
     $("gScrim").hidden = false;
   }
+  const openGoogleEvent = it => openInfo(it);
+  $("gEdit").addEventListener("click", () => { const it = infoItem; $("gScrim").hidden = true; if (it) openEditor(it); });
   $("gClose").addEventListener("click", () => $("gScrim").hidden = true);
   $("gScrim").addEventListener("mousedown", e => { if (e.target === $("gScrim")) $("gScrim").hidden = true; });
 
@@ -1723,7 +1796,7 @@ a.btn { text-decoration: none; color: var(--ink); }
     const newTags = (data.tags || []).filter(t => t && t.id && t.name && !known.has(t.id));
     if (newTags.length) { state.tags.push(...newTags.map(t => ({ id: t.id, name: t.name, color: t.color }))); saveTags(); }
     const have = new Set(state.items.map(i => i.id));
-    const add = data.items.filter(i => i && i.id && i.title && !have.has(i.id) && i.source !== "google");
+    const add = data.items.filter(i => i && i.id && (i.title || i.kind === "mark") && !have.has(i.id) && i.source !== "google");
     for (const it of add) await saveItem(it);
     $("xScrim").hidden = true;
     toast(add.length ? `Добавлено ${add.length} ${plural(add.length, "запись", "записи", "записей")}` : "Новых записей не нашлось");
