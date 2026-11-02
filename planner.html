@@ -149,7 +149,7 @@ button { cursor: pointer; }
 /* Task panel hidden: the calendar takes the full width. */
 .main.side-off { grid-template-columns: minmax(0, 1fr); }
 .main.side-off .side { display: none; }
-.side-toggle { background: var(--surface); color: var(--ink-2); }
+.side-toggle { background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); }
 .side-toggle:hover { color: var(--ink); background: var(--surface-2); }
 .side-toggle .fill { fill: currentColor; opacity: .9; }
 .side-toggle[aria-pressed="false"] .fill { opacity: 0; }
@@ -394,8 +394,21 @@ a.btn { text-decoration: none; color: var(--ink); }
   .mcount, .mlist { display: none; }
   .mload { width: 70%; }
 }
-@media (max-width: 560px) {
-  .top .nav { margin-left: auto; }
+/* Phones and narrow windows: title and period switch on top; «Сегодня», «Добавить» and the panel
+   toggle pinned left, week arrows pinned right. */
+@media (max-width: 900px) {
+  .top {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px 8px;
+    grid-template-areas: "brand seg" "actions nav";
+  }
+  .brand { grid-area: brand; }
+  .seg.view-seg { grid-area: seg; }
+  .top-actions { grid-area: actions; justify-self: start; }
+  .nav { grid-area: nav; justify-self: end; }
+}
+/* No room for the date range next to the arrows; the day strip below shows the dates. */
+@media (max-width: 420px) {
+  .week-label { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } .btn.today { animation: none; } }
 </style>
@@ -1109,6 +1122,23 @@ a.btn { text-decoration: none; color: var(--ink); }
     }
     render();
   }
+  // Swipe across the calendar: left for the next day, right for the previous one (in month view, the month).
+  (() => {
+    let x0 = null, y0 = 0;
+    const body = $("calBody");
+    body.addEventListener("touchstart", e => { if (e.touches.length === 1) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; } }, { passive: true });
+    body.addEventListener("touchend", e => {
+      if (x0 === null) return;
+      const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const dir = dx < 0 ? 1 : -1;
+      if (state.view === "month") return step(dir);
+      state.selected = iso(addDays(parse(state.selected), dir));
+      state.weekStart = monday(parse(state.selected));
+      render();
+    }, { passive: true });
+  })();
   $("prev").onclick = () => step(-1);
   $("next").onclick = () => step(1);
   $("todayBtn").onclick = () => { state.weekStart = monday(new Date()); state.selected = todayIso(); render(); scrollToNow(); };
