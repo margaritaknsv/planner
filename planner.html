@@ -1541,8 +1541,19 @@ a.btn { text-decoration: none; color: var(--ink); }
     gs.token = null; gs.fileId = null; lsSave(LS_TOKEN, null); lsSave(LS_SIGNED, false);
     state.gitems = []; gcal.status = "signedout"; render();
   }
+  // Reload when GitHub has a newer build than the one on screen; a fresh query skips stale caches.
+  async function checkForUpdate() {
+    if (!SITE.build) return;
+    try {
+      const html = await (await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })).text();
+      const m = html.match(/"build":\s*"(\d+)"/);
+      if (m && m[1] > SITE.build) location.replace(location.pathname + "?v=" + m[1]);
+    } catch {}
+  }
   async function initSite() {
     gcal.inited = true; gcal.site = true;
+    checkForUpdate();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
     if (!SITE.clientId) { gcal.status = "noclient"; render(); return; }
     takeRedirectToken();
     const t = lsLoad(LS_TOKEN, null);

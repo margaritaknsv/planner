@@ -10,6 +10,7 @@ OAuth client ID from config.json.
 """
 import json
 import pathlib
+import time
 
 ROOT = pathlib.Path(__file__).parent
 src = (ROOT / "planner.html").read_text(encoding="utf-8")
@@ -19,7 +20,8 @@ config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 cut = src.index("</style>") + len("</style>")
 head, body = src[:cut], src[cut:]
 
-site = {"clientId": config.get("googleClientId", "")}
+# The build id lets an open page notice a newer version and reload itself (home-screen apps cache hard).
+site = {"clientId": config.get("googleClientId", ""), "build": time.strftime("%Y%m%d%H%M%S")}
 
 doc = f"""<!doctype html>
 <html lang="ru">
