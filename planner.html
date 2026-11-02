@@ -1229,10 +1229,11 @@ a.btn { text-decoration: none; color: var(--ink); }
     setTimeout(() => {
       pageShift(dir);
       shiftTo(dir * d, 0);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        shiftTo(0, 1, 200, "cubic-bezier(.2,.7,.2,1)");
-        setTimeout(() => { paging = false; }, 200);
-      }));
+      // Force the start position to apply, then slide in. Timers only: waiting for an animation frame
+      // could stall and leave the calendar locked, ignoring every later swipe.
+      void $("calGrid").offsetWidth;
+      shiftTo(0, 1, 200, "cubic-bezier(.2,.7,.2,1)");
+      setTimeout(() => { shiftTo(0, 1); paging = false; }, 220);
     }, 110);
   }
   function shiftDays(n) {

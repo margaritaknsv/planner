@@ -13,7 +13,7 @@ body { margin: 0; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
 </style>
-<script>window.PLANNER_SITE = {"clientId": "699967413013-6me665o272afi9i1mg5ho7mgaqr3ul3k.apps.googleusercontent.com", "build": "20261102160342"};</script>
+<script>window.PLANNER_SITE = {"clientId": "699967413013-6me665o272afi9i1mg5ho7mgaqr3ul3k.apps.googleusercontent.com", "build": "20261102160829"};</script>
 <title>Мой планировщик</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1248,10 +1248,11 @@ a.btn { text-decoration: none; color: var(--ink); }
     setTimeout(() => {
       pageShift(dir);
       shiftTo(dir * d, 0);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        shiftTo(0, 1, 200, "cubic-bezier(.2,.7,.2,1)");
-        setTimeout(() => { paging = false; }, 200);
-      }));
+      // Force the start position to apply, then slide in. Timers only: waiting for an animation frame
+      // could stall and leave the calendar locked, ignoring every later swipe.
+      void $("calGrid").offsetWidth;
+      shiftTo(0, 1, 200, "cubic-bezier(.2,.7,.2,1)");
+      setTimeout(() => { shiftTo(0, 1); paging = false; }, 220);
     }, 110);
   }
   function shiftDays(n) {
