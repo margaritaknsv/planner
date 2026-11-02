@@ -1454,26 +1454,62 @@ a.btn { text-decoration: none; color: var(--ink); }
     afterSignIn();
   }
   function afterSignIn() { gcal.status = "loading"; gs.calKey = ""; render(); sync(); }
+  // Phones and home-screen apps cannot hand a popup's result back to the page, so they sign in by
+  // leaving for Google's page and coming back with the token in the address (#access_token=…).
+  const LS_OAUTH_STATE = "planner.oauthState";
+  const REDIRECT_URI = location.origin + location.pathname.replace(/index\.html$/, "");
+  const useRedirect = () => matchMedia("(pointer: coarse)").matches || navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+  function redirectSignIn() {
+    const st = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem(LS_OAUTH_STATE, st); } catch {}
+    const q = new URLSearchParams({
+      client_id: SITE.clientId, redirect_uri: REDIRECT_URI, response_type: "token", scope: G_SCOPES.join(" "),
+      include_granted_scopes: "true", state: st, prompt: lsLoad(LS_SIGNED, false) ? "select_account" : "consent",
+    });
+    location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + q);
+  }
+  // Reads the token Google put in the address after a redirect sign-in. Returns true when there was one.
+  function takeRedirectToken() {
+    if (!/[#&](access_token|error)=/.test(location.hash)) return false;
+    const h = new URLSearchParams(location.hash.slice(1));
+    history.replaceState(null, "", location.pathname + location.search);
+    let expected = null;
+    try { expected = localStorage.getItem(LS_OAUTH_STATE); localStorage.removeItem(LS_OAUTH_STATE); } catch {}
+    if (h.get("error")) { toast("Вход через Google отменён"); return false; }
+    if (expected && h.get("state") !== expected) return false;
+    const granted = (h.get("scope") || "").split(" ");
+    if (!G_SCOPES.every(sc => granted.includes(sc))) { gcal.status = "scopes"; return false; }
+    gs.token = h.get("access_token");
+    gs.exp = Date.now() + (Number(h.get("expires_in") || 3600) - 60) * 1000;
+    lsSave(LS_TOKEN, { token: gs.token, exp: gs.exp }); lsSave(LS_SIGNED, true);
+    return true;
+  }
   function signIn() {
-    if (!gs.client) { toast("Вход через Google ещё загружается, попробуйте через пару секунд"); return; }
+    if (useRedirect() || !gs.client) return redirectSignIn();
     gs.client.requestAccessToken({ prompt: lsLoad(LS_SIGNED, false) ? "" : "consent" });
   }
   function signOut() {
-    if (gs.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gs.token, () => {});
+    if (gs.token) fetch("https://oauth2.googleapis.com/revoke?token=" + encodeURIComponent(gs.token), { method: "POST", mode: "no-cors" }).catch(() => {});
     gs.token = null; gs.fileId = null; lsSave(LS_TOKEN, null); lsSave(LS_SIGNED, false);
     state.gitems = []; gcal.status = "signedout"; render();
   }
   async function initSite() {
     gcal.inited = true; gcal.site = true;
     if (!SITE.clientId) { gcal.status = "noclient"; render(); return; }
+    takeRedirectToken();
     const t = lsLoad(LS_TOKEN, null);
     if (t && t.exp > Date.now()) { gs.token = t.token; gs.exp = t.exp; afterSignIn(); }
-    else { gcal.status = lsLoad(LS_SIGNED, false) ? "expired" : "signedout"; render(); }
+    else if (gcal.status !== "scopes") { gcal.status = lsLoad(LS_SIGNED, false) ? "expired" : "signedout"; render(); }
+    else render();
     try {
       await loadGis();
       gs.client = google.accounts.oauth2.initTokenClient({
         client_id: SITE.clientId, scope: G_SCOPES.join(" "), callback: onToken,
-        error_callback: () => { gcal.status = signedIn() ? "synced" : "signedout"; render(); },
+        // A popup the browser refused to open falls back to the redirect sign-in.
+        error_callback: err => {
+          if (err?.type === "popup_failed_to_open") return redirectSignIn();
+          gcal.status = signedIn() ? "synced" : "signedout"; render();
+        },
       });
     } catch { gcal.status = "gisfail"; render(); }
     // Pick up changes from other devices when the tab comes back, and every few minutes while open.
