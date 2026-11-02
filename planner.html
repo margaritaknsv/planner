@@ -385,9 +385,11 @@ a.btn { text-decoration: none; color: var(--ink); }
   .main { grid-template-columns: minmax(0, 1fr); }
   .cal-body { max-height: 62vh; }
   .week-label { min-width: 0; }
-  .brand h1 { font-size: 24px; }
-  .day-h .num { font-size: 22px; }
-  .day-h .dow { font-size: 12px; }
+  .brand h1 { font-size: 20px; }
+  .day-h { padding: 6px 2px 8px; }
+  .day-h .num { font-size: 16px; letter-spacing: -.01em; }
+  .day-h .dow { font-size: 11px; }
+  .seg.view-seg button { padding: 0 10px; font-size: 13px; }
   .mcell { min-height: 64px; padding: 6px 4px 8px; align-items: center; }
   .mtop { justify-content: center; }
   .mnum { margin: 0; font-size: 14px; }
@@ -420,6 +422,7 @@ a.btn { text-decoration: none; color: var(--ink); }
       <h1 id="monthLabel"></h1>
     </div>
     <div class="seg view-seg" role="group" aria-label="Период">
+      <button type="button" data-view="3d" aria-pressed="false">3 дня</button>
       <button type="button" data-view="week" aria-pressed="true">Неделя</button>
       <button type="button" data-view="month" aria-pressed="false">Месяц</button>
     </div>
@@ -630,7 +633,8 @@ a.btn { text-decoration: none; color: var(--ink); }
   const state = {
     items: [], tags: DEFAULT_TAGS.slice(), loaded: false, mode: "local",
     weekStart: monday(new Date()), selected: todayIso(), gitems: [], deleted: {}, tagsAt: 0,
-    view: (() => { try { return localStorage.getItem(VIEW_KEY) === "month" ? "month" : "week"; } catch { return "week"; } })(),
+    view: (() => { try { const v = localStorage.getItem(VIEW_KEY); return v === "month" || v === "3d" ? v : "week"; } catch { return "week"; } })(),
+    rangeStart: todayIso(), // first of the three days in the «3 дня» view
     filter: new Set((() => { try { return JSON.parse(localStorage.getItem(FILTER_KEY) || "[]"); } catch { return []; } })()),
   };
   let col = null, tagsDoc = null; // db refs when cloud-backed
@@ -747,6 +751,7 @@ a.btn { text-decoration: none; color: var(--ink); }
   // ---------- render ----------
   const narrow = () => window.matchMedia("(max-width: 900px)").matches;
   function visibleDays() {
+    if (state.view === "3d") return [0, 1, 2].map(i => iso(addDays(parse(state.rangeStart), i)));
     if (narrow()) return [state.selected];
     return Array.from({ length: 7 }, (_, i) => iso(addDays(state.weekStart, i)));
   }
@@ -757,15 +762,21 @@ a.btn { text-decoration: none; color: var(--ink); }
     // Drop filter entries for tags that no longer exist.
     for (const id of [...state.filter]) if (id !== NONE && !tagById(id)) state.filter.delete(id);
 
-    const month = state.view === "month";
-    const ws = state.weekStart, we = addDays(ws, 6), mid = month ? parse(state.selected) : addDays(ws, 3);
+    const month = state.view === "month", three = state.view === "3d";
+    // The three-day window follows the selected day whenever it falls outside it (Today, a month click).
+    if (three) {
+      const st = parse(state.rangeStart), sel = parse(state.selected);
+      if (sel < st || sel > addDays(st, 2)) state.rangeStart = state.selected;
+    }
+    const ws = three ? parse(state.rangeStart) : state.weekStart, we = addDays(ws, three ? 2 : 6);
+    const mid = month || three ? parse(state.selected) : addDays(ws, 3);
     $("monthLabel").textContent = `${cap(fmtMonthName.format(mid))} ${mid.getFullYear()}`;
     $("weekLabel").hidden = month;
     $("weekLabel").textContent = ws.getMonth() === we.getMonth()
       ? `${ws.getDate()}–${we.getDate()} ${fmtDM.format(we).split(" ")[1]}`
       : `${fmtDM.format(ws)} – ${fmtDM.format(we)}`;
-    $("prev").setAttribute("aria-label", month ? "Предыдущий месяц" : "Предыдущая неделя");
-    $("next").setAttribute("aria-label", month ? "Следующий месяц" : "Следующая неделя");
+    $("prev").setAttribute("aria-label", month ? "Предыдущий месяц" : three ? "Предыдущие 3 дня" : "Предыдущая неделя");
+    $("next").setAttribute("aria-label", month ? "Следующий месяц" : three ? "Следующие 3 дня" : "Следующая неделя");
     document.querySelectorAll(".view-seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === state.view));
 
     renderTagbar();
@@ -839,11 +850,13 @@ a.btn { text-decoration: none; color: var(--ink); }
     const items = shown();
     const tmpl = `56px repeat(${days.length}, minmax(0, 1fr))`;
     const head = $("calHead"), grid = $("calGrid");
-    head.style.gridTemplateColumns = narrow() ? `repeat(7, minmax(0, 1fr))` : tmpl;
+    // On phones the week view keeps a 7-day strip to pick the one visible day.
+    const strip = narrow() && state.view === "week";
+    head.style.gridTemplateColumns = strip ? `repeat(7, minmax(0, 1fr))` : tmpl;
     grid.style.gridTemplateColumns = tmpl;
 
     const weekDays = Array.from({ length: 7 }, (_, i) => iso(addDays(state.weekStart, i)));
-    head.innerHTML = (narrow() ? "" : `<div></div>`) + (narrow() ? weekDays : days).map(ds => {
+    head.innerHTML = (strip ? "" : `<div></div>`) + (strip ? weekDays : days).map(ds => {
       const d = parse(ds);
       const left = items.filter(i => i.kind === "task" && i.date === ds && !i.done).length;
       const evs = items.filter(i => i.kind === "event" && occursOn(i, ds)).length;
@@ -1116,13 +1129,16 @@ a.btn { text-decoration: none; color: var(--ink); }
       state.selected = sameMonth ? todayIso() : iso(m);
       state.weekStart = monday(parse(state.selected));
       $("calBody").scrollTop = 0;
+    } else if (state.view === "3d") {
+      state.rangeStart = state.selected = iso(addDays(parse(state.rangeStart), 3 * dir));
+      state.weekStart = monday(parse(state.selected));
     } else {
       state.weekStart = addDays(state.weekStart, 7 * dir);
       state.selected = iso(narrow() ? state.weekStart : addDays(parse(state.selected), 7 * dir));
     }
     render();
   }
-  // Swipe across the calendar: left for the next day, right for the previous one (in month view, the month).
+  // Swipe across the calendar: left for the next day, right for the previous one (the next three days or month in those views).
   (() => {
     let x0 = null, y0 = 0;
     const body = $("calBody");
@@ -1133,7 +1149,7 @@ a.btn { text-decoration: none; color: var(--ink); }
       x0 = null;
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       const dir = dx < 0 ? 1 : -1;
-      if (state.view === "month") return step(dir);
+      if (state.view === "month" || state.view === "3d") return step(dir);
       state.selected = iso(addDays(parse(state.selected), dir));
       state.weekStart = monday(parse(state.selected));
       render();
@@ -1141,12 +1157,13 @@ a.btn { text-decoration: none; color: var(--ink); }
   })();
   $("prev").onclick = () => step(-1);
   $("next").onclick = () => step(1);
-  $("todayBtn").onclick = () => { state.weekStart = monday(new Date()); state.selected = todayIso(); render(); scrollToNow(); };
+  $("todayBtn").onclick = () => { state.weekStart = monday(new Date()); state.selected = state.rangeStart = todayIso(); render(); scrollToNow(); };
   function setView(v) {
     if (state.view === v) return;
     state.view = v;
     try { localStorage.setItem(VIEW_KEY, v); } catch {}
     state.weekStart = monday(parse(state.selected));
+    if (v === "3d") state.rangeStart = state.selected;
     render();
     scrollToNow();
   }
@@ -1258,6 +1275,7 @@ a.btn { text-decoration: none; color: var(--ink); }
       const s = parse(state.selected);
       return [monday(new Date(s.getFullYear(), s.getMonth(), 1)), addDays(monday(new Date(s.getFullYear(), s.getMonth() + 1, 0)), 7)];
     }
+    if (state.view === "3d") return [parse(state.rangeStart), addDays(parse(state.rangeStart), 3)];
     return [state.weekStart, addDays(state.weekStart, 7)];
   }
   const rangeInput = () => { const [a, b] = visibleRange(); return { startTime: iso(a) + "T00:00:00", endTime: iso(b) + "T00:00:00", orderBy: "startTime", pageSize: 250 }; };
