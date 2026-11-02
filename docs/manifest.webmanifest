@@ -1,0 +1,8 @@
+{
+  "name": "Мой планировщик",
+  "short_name": "Планировщик",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F2F2F3",
+  "theme_color": "#F2F2F3"
+}
